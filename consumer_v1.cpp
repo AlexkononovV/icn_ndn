@@ -68,7 +68,11 @@
 
     Name dataName(i2.getName());
 
-    static const std::string content = "10,3";
+    //static const std::string content ;
+    std::string in;
+    std::cout << "input: ";
+    getline (std::cin, in);
+    static const std::string content = in;
 
     shared_ptr<Data> data = make_shared<Data>();
     data->setName(dataName);
