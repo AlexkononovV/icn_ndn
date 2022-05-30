@@ -36,7 +36,8 @@ private:
 
   void
   onInterestId(const InterestFilter&, const Interest& i);
-
+  void
+  onPrefixRegistered(const Name& prefix, std::string ConsumerPrefix);
   void
   onRegisterFailed(const Name& prefix, const std::string& reason);
   void 
@@ -49,8 +50,8 @@ public:
 
   ExecInstance(std::string id);
 
-  bool
-  run(std::string ConsumerPrefix);
+  void
+  run(std::string ConsumerPrefix, std::string id);
 
 };
 

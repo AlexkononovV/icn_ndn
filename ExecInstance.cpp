@@ -37,19 +37,35 @@ public:
   ExecInstance::ExecInstance(std::string id)
   {
     id = id;
-    //m_face = &Producer.getFace();
+    //m_face = face;
     status = false;
     result = "";
   }
 
-  bool
-  ExecInstance::run(std::string ConsumerPrefix)
+  void
+  ExecInstance::run(std::string ConsumerPrefix, std::string id)
   {
+    
     m_face.setInterestFilter("/testFunction/"+id ,
                              std::bind(&ExecInstance::onInterestId, this, _1, _2),
-                             nullptr, // RegisterPrefixSuccessCallback is optional
+                             //nullptr, // RegisterPrefixSuccessCallback is optional
+                             std::bind(&ExecInstance::onPrefixRegistered, this, _1, ConsumerPrefix),
                              std::bind(&ExecInstance::onRegisterFailed, this, _1, _2));
-    //m_face.processEvents();
+
+
+    m_face.processEvents();
+
+
+  }
+
+//private:
+
+  void ExecInstance::onPrefixRegistered(const Name& prefix, std::string ConsumerPrefix) {
+
+    std::cout << "\nPrefix " << prefix << " registered." << std::endl;
+
+
+
     Name interestName(ConsumerPrefix);
            interestName.appendVersion();
            //interestName.appendSequenceNumber(m_currentSeqNo);
@@ -63,12 +79,10 @@ public:
                                  bind(&ExecInstance::onNack, this, _1, _2),
                                  bind(&ExecInstance::onTimeout, this, _1));
 
-          std::cout << ">> sending I1 : " << interest << std::endl;
-    m_face.processEvents();
+          std::cout << ">> SENT I1 : " << interest << std::endl;
+    //m_face.processEvents();
+
   }
-
-//private:
-
 
   void
   ExecInstance::onNack(const Interest& interest, const lp::Nack& nack)

@@ -19,9 +19,6 @@
 
 #include "ExecInstance.hpp"
 
-#include <chrono>
-#include <thread>
-
 
 // Enclosing code in ndn simplifies coding (can also use `using namespace ndn`)
 namespace ndn {
@@ -41,6 +38,9 @@ public:
   Producer()
   {
     m_validator.load("trust-schema.conf");
+
+
+    status = false;
   }
   void
   run()
@@ -106,7 +106,7 @@ private:
         ptr = &ack; 
         (*ptr).code = "OK";
         (*ptr).time = estimate_exec_time();
-        (*ptr).id = "123"; //generate_exec_id();
+        (*ptr).id = generate_exec_id(); //"123"; //generate_exec_id();
         
 
         static std::string content((*ptr).code +":"+boost::lexical_cast<std::string>((*ptr).time)+":"+(*ptr).id);
@@ -123,26 +123,96 @@ private:
         m_face.put(*data);
 
 
-        //std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-
         register_exec_id((*ptr).id);
         
+
   }
 
 
 void
 register_exec_id(const std::string id)
   {
-    //m_face.shutdown();
 
-    
-    ExecInstance *execution = new ExecInstance(id);
-    //execution((*ptr).id);
-    execution->run("/consumer/id",id);
-    
-    
+    m_face.setInterestFilter("/testFunction/"+id ,
+                             std::bind(&Producer::onInterestId, this, _1, _2),
+                             nullptr, // RegisterPrefixSuccessCallback is optional
+                             std::bind(&Producer::onRegisterFailed, this, _1, _2));
+    //m_face.processEvents();
+    Name interestName("/consumer/id");
+           interestName.appendVersion();
+           //interestName.appendSequenceNumber(m_currentSeqNo);
+          Interest interest(interestName);
+           interest.setCanBePrefix(false);
+           interest.setMustBeFresh(true);
+           interest.setInterestLifetime(6_s); // The default is 4 seconds
+
+          m_face.expressInterest(interest,
+                                 bind(&Producer::onDataInput, this,  _1, _2),
+                                 bind(&Producer::onNack, this, _1, _2),
+                                 bind(&Producer::onTimeout, this, _1));
+
+          std::cout << ">> SENT I1 : " << interest << std::endl;
+   // m_face.processEvents();
 
   }
+
+  void
+  onDataInput(const Interest&, const Data& data)
+  {
+
+    std::string in = std::string(reinterpret_cast<const char*>(data.getContent().value()),
+                                                           data.getContent().value_size());
+    std::cerr << "<< input: "
+              << in
+              << std::endl;
+    execute(in);
+  }
+
+  void execute(std::string in)
+  {
+    std::string my_input(in);
+    std::vector<std::string> results;
+
+    boost::algorithm::split(results, my_input, boost::is_any_of(","));
+
+    int sum = 0;
+    for (std::vector<std::string>::iterator t=results.begin(); t!=results.end(); ++t) 
+    { 
+        sum += std::stoi(*t); 
+    } 
+    //sum = 5;
+     
+    result = std::to_string(sum); 
+    status = true;
+
+    std::cout << "\n<< RESULT :" << result << std::endl;
+  }
+  
+  void
+  onInterestId(const InterestFilter&, const Interest& i)
+  { static std::string content;
+    if(status) {
+      content=result;
+    }else {
+      content="NACK:10ms";
+    }
+      
+
+        //static ndn::Block content = ptr;
+        auto data = make_shared<Data>(i.getName());
+        data->setFreshnessPeriod(10_s);
+        data->setContent(make_span(reinterpret_cast<const uint8_t*>(content.data()), content.size()));
+        //data->setContent( make_span( ptr, sizeof(struct ACK) ) )
+
+        m_keyChain.sign(*data);
+
+        std::cout << "\n<< RESULT sent \n" << std::endl;
+        m_face.put(*data); 
+
+        m_face.shutdown();
+
+  }
+
 
 
   void
@@ -163,6 +233,8 @@ private:
   uint64_t m_currentSeqNo;
   ValidatorConfig m_validator{m_face};
 
+  bool status;
+  std::string result;
 public:
 
   

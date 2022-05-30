@@ -5,6 +5,8 @@
  #include <ndn-cxx/security/key-chain.hpp>
 
  #include <iostream>
+
+#include <boost/algorithm/string.hpp>
  
  // Enclosing code in ndn simplifies coding (can also use `using namespace ndn`)
  namespace ndn {
@@ -24,16 +26,19 @@
    run()
    {
     
+
+    //m_face.processEvents();
+
+
     m_currentSeqNo=0;
     m_prefixId = m_face.setInterestFilter("/consumer/id",
                              std::bind(&Consumer::onInterest, this, _1, _2),
                              //RegisterPrefixSuccessCallback(),
                              std::bind(&Consumer::onPrefixRegistered, this, _1),
                              std::bind(&Consumer::onRegisterFailed, this, _1, _2));
- 
 
     m_face.processEvents();
-
+   
    }
 
  
@@ -43,13 +48,13 @@
 
     std::cout << "\nPrefix " << prefix << " registered." << std::endl;
 
-    Name interestName("/testFunction/sum");
+        Name interestName("/testFunction/sum");
        interestName.appendVersion();
        interestName.appendSequenceNumber(m_currentSeqNo);
       Interest interest(interestName);
-       interest.setCanBePrefix(true);
+       interest.setCanBePrefix(false);
        interest.setMustBeFresh(true);
-       interest.setInterestLifetime(4_s); // The default is 4 seconds
+       interest.setInterestLifetime(6_s); // The default is 4 seconds
 
       m_face.expressInterest(interest,
                              bind(&Consumer::onData1, this,  _1, _2),
@@ -57,14 +62,14 @@
                              bind(&Consumer::onTimeout, this, _1));
 
       std::cout << "\n >>  I1 : " << interest << std::endl;
+      //m_face.processEvents();
 
-    //m_face.processEvents();
   }
 
   void
    onData1(const Interest&, const Data& data)
    {
-     std::cout << "\n D received :"  << data << std::endl;
+     std::cout << "\n D received :"  << std::endl;
      /*
      m_validator.validate(data,
                           [] (const Data&) {
@@ -74,12 +79,19 @@
                             std::cout << "Error authenticating data: " << error << std::endl;
                           });
       */
-    std::cerr << " <<  "
-              << std::string(reinterpret_cast<const char*>(data.getContent().value()),
-                                                           data.getContent().value_size())
-              << std::endl;
-
     
+    std::string response = std::string(reinterpret_cast<const char*>(data.getContent().value()),
+                                                           data.getContent().value_size()) ;
+    std::cerr << " <<  " << response << std::endl;
+    
+    std::vector<std::string> results;
+
+    boost::algorithm::split(results, response, boost::is_any_of(":"));
+
+    std::cout << "Response: "<< results[0] << std::endl;
+    std::cout << "\n Execution time (ms): "<< results[1] << std::endl;
+    std::cout << "\n ID of thunk: "<< results[2] << std::endl;
+    thunk_id = results[2];
     //m_face.processEvents();
    }
 
@@ -117,13 +129,13 @@
 
   void
   fetchData() {
-    Name interestName("/testFunction/123");
+    Name interestName("/testFunction/"+thunk_id);
        interestName.appendVersion();
        interestName.appendSequenceNumber(m_currentSeqNo);
       Interest interest(interestName);
        interest.setCanBePrefix(true);
        interest.setMustBeFresh(true);
-       interest.setInterestLifetime(4_s); // The default is 4 seconds
+       interest.setInterestLifetime(6_s); // The default is 4 seconds
 
       m_face.expressInterest(interest,
                              bind(&Consumer::onData2, this,  _1, _2),
@@ -157,6 +169,8 @@
               << std::endl;
 
    std::cout << "\nfinish "<< std::endl;
+
+   m_face.shutdown();
    }
  
 
@@ -188,6 +202,8 @@
 
    RegisteredPrefixHandle m_prefixId;
    KeyChain m_keyChain;
+
+   std::string thunk_id;
  };
  
  } // namespace examples

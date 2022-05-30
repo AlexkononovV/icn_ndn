@@ -23,5 +23,14 @@ def build (bld):
         features=['cxx', 'cxxprogram'],
         source='consumer_v1.cpp',
         use='NDN_CXX')
+    bld(target='producer_v2',
+        features=['cxx', 'cxxprogram'],
+        source=['producer_v2.cpp','ExecInstance.cpp'],
+        use='NDN_CXX')
+       
+    bld(target='consumer_v2',
+        features=['cxx', 'cxxprogram'],
+        source='consumer_v2.cpp',
+        use='NDN_CXX')
 
 
