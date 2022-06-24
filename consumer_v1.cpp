@@ -88,6 +88,7 @@
 
     std::cout << "\n << I for input \n"  << std::endl;
 
+    
     Name dataName(i2.getName());
 
     //static const std::string content ;
