@@ -96,19 +96,21 @@ public:
     //Block b( make_span(reinterpret_cast<const uint8_t*>(p), strlen(p) )  ) ;
     //make_span(reinterpret_cast<const uint8_t*>(content.data()), content.size())
     
-    std::string name("testing");
+    std::string name("testing9");
 
     auto a = Buffer(name.data(),name.size());
     auto m = std::make_shared<Buffer>(a);
 
     Block b((uint32_t)129, m);
     b.encode();
+
     //Block* v = &b;
     //std::cout << "\n"<< *v << std::endl;
 
 
     //interest.setApplicationParameters( make_span(reinterpret_cast<const uint8_t*>(p.data()), p.size()));
     interest.setApplicationParameters( b);
+
     interest.setMustBeFresh(true);
     interest.setInterestLifetime(6_s); // The default is 4 seconds
 

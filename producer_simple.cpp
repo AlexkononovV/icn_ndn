@@ -62,12 +62,17 @@ private:
     //b.decode();
     
     b.parse();
-    auto c = b.get(129);
-    //std::cout << b.value_size() << std::endl;
+    for (Block x : b.elements()){
+      std::cout << x.type() << std::endl;
+    }
+
+
+    auto c = b.get(b.elements()[0].type());
+
     std::string s =std::string(reinterpret_cast<const char*>(c.value()), c.value_size());
-    //std::string s(b.value());
+
      std::cout << s << std::endl;
-    //std::cout << b.elements().size() << std::endl; 
+
 
     static const std::string content("Hello, world!");
 
