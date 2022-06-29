@@ -29,87 +29,123 @@
 #include <bitset>
 #include <ndn-cxx/encoding/buffer.hpp>
 
+#include "consumer_simple.hpp"
+#include <boost/regex.hpp>
+
 
 // Enclosing code in ndn simplifies coding (can also use `using namespace ndn`)
 namespace ndn {
 // Additional nested namespaces should be used to prevent/limit name conflicts
 namespace examples {
 
-class Consumer
-{
-public:
+//class Consumer{
+//public:
 
-  Consumer()
+  Consumer::Consumer()
   {
     m_validator.load("trust-schema_default.conf");
+    //prefix = f_prefix;
   }
 
   void
-  run()
-  {
-    Name interestName("/example/test/function");
-    interestName.appendVersion();
+  Consumer::run()
+   {
+    
+    //m_currentSeqNo=0;
+    m_prefixId = m_face.setInterestFilter("/consumer/id",
+                             std::bind(&Consumer::onInterest, this, _1, _2),
+                             //RegisterPrefixSuccessCallback(),
+                             std::bind(&Consumer::onPrefixRegistered, this, _1),
+                             std::bind(&Consumer::onRegisterFailed, this, _1, _2));
 
+    m_face.processEvents();
+
+  }
+
+  
+  void Consumer::onPrefixRegistered(const Name& prefix) {
+
+    std::cout << "\nPrefix " << prefix << " registered." << std::endl;
+  }
+
+  void
+  Consumer::onRegisterFailed(const Name& prefix, const std::string& reason)
+  {
+    std::cerr << "ERROR: Failed to register prefix '" << prefix
+              << "' with the local forwarder (" << reason << ")" << std::endl;
+    m_face.shutdown();
+  }
+
+  void
+  Consumer::onInterest(const InterestFilter& filter, const Interest& i2){
+
+    std::cout << "\n << I for input \n"  << std::endl;
+
+    
+    Name dataName(i2.getName());
+
+    std::string in;
+    std::cout << "input: ";
+    getline (std::cin, in);
+    static const std::string content = in;
+
+    shared_ptr<Data> data = make_shared<Data>();
+    data->setName(dataName);
+    data->setFreshnessPeriod(10_s); 
+    data->setContent(make_span(reinterpret_cast<const uint8_t*>(content.data()), content.size()));
+
+    // Sign Data packet with default identity
+    m_keyChain.sign(*data);
+
+    m_face.put(*data);
+
+    std::cout << ">> sent D with input "  << std::endl;
+
+    //m_face.unsetInterestFilter(m_prefixId);
+    //error: ‘class ndn::Face’ has no member named ‘unsetInterestFilter’
+  }
+
+  void Consumer::setPrefix(std::string pref)
+  {
+    prefix = pref;
+  }
+  void Consumer::explicitParameters(bool value){
+    explicit_input=value;
+  }
+
+  void Consumer::setParameters(std::string parms){
+    params = parms;    
+  }
+
+  int Consumer::execute(){
+
+    if(prefix.empty())
+    {
+      std::cout << "ERROR: no function prefix given" << std::endl;
+      return 0;
+    }
+
+    Name interestName(prefix);
+    interestName.appendVersion();
     Interest interest(interestName);
     
+    //std::string name("testing9");
+    if (explicit_input){
+      auto a = Buffer(params.data(),params.size());
+      auto m = std::make_shared<Buffer>(a);
 
-
-
-    //auto p = "0x240874657374696E6720737472696E6720746C76" ;
-    
-    const uint8_t text[] = { 0x74, 0x65,0x73,0x74,0x69,0x6E,0x67,0x20,0x73,0x74,0x72,0x69,0x6E,0x67,0x20,0x74,0x6C,0x76 };
-    std::cout << sizeof(text) << std::endl;
-
-    const uint8_t data[] = {  
-      0x24, //type
-      0x13, //size 
-      0x74, 0x65,0x73,0x74,0x69,0x6E,0x67,0x20,0x73,0x74,0x72,0x69,0x6E,0x67,0x20,0x74,0x6C,0x76 //value
-    };
-    /*
-    span<const uint8_t> buffer = make_span(reinterpret_cast<const uint8_t*>(p.data()), p.size())  ;
-    
-    auto pos = buffer.begin();
-    const auto end = buffer.end();
-
-    uint32_t m_type = tlv::Invalid;
-
-    m_type = tlv::readType(pos, end);
-    uint64_t length = tlv::readVarNumber(pos, end);
-    // pos now points to TLV-VALUE
-
-    BOOST_ASSERT(pos <= end);
-    std::cout << pos << std::endl;
-    std::cout << end << std::endl;
-    std::cout << m_type << std::endl;
-    std::cout << length << std::endl;
-    std::cout << static_cast<uint64_t>(std::distance(pos, end)) << std::endl;
-
-    if (length > static_cast<uint64_t>(std::distance(pos, end))) {
-      //NDN_THROW(Error("Not enough bytes in the buffer to fully parse TLV"));
-      std::cout << "error" << std::endl;
+      Block b((uint32_t)129, m);
+      b.encode();      
+      interest.setApplicationParameters( b);
     }
-    */
-    
+    else{
+      run();
+      std::string msg = "/consumer/id";
+      auto a = Buffer(msg.data(),msg.size());
+      auto m = std::make_shared<Buffer>(a);
 
-    //std::string p = "DF 82 0A 03 30 31 32";
-    //Block b( make_span(reinterpret_cast<const uint8_t*>(p.data), p.size())  ) ;
-    //Block b( make_span(reinterpret_cast<const uint8_t*>(p), strlen(p) )  ) ;
-    //make_span(reinterpret_cast<const uint8_t*>(content.data()), content.size())
-    
-    std::string name("testing9");
-
-    auto a = Buffer(name.data(),name.size());
-    auto m = std::make_shared<Buffer>(a);
-
-    Block b((uint32_t)129, m);
-    b.encode();
-
-    //Block* v = &b;
-    //std::cout << "\n"<< *v << std::endl;
-
-
-    //interest.setApplicationParameters( make_span(reinterpret_cast<const uint8_t*>(p.data()), p.size()));
-    interest.setApplicationParameters( b);
+      Block b((uint32_t)131, m);
+    }
 
     interest.setMustBeFresh(true);
     interest.setInterestLifetime(6_s); // The default is 4 seconds
@@ -124,12 +160,12 @@ public:
     m_face.processEvents();
   }
 
-private:
+//private:
   void
-  onData(const Interest&, const Data& data)
+  Consumer::onData(const Interest&, const Data& data)
   {
     std::cout << "Received Data " << data << std::endl;
-
+    /*
     m_validator.validate(data,
                          [] (const Data&) {
                            std::cout << "Data conforms to trust schema" << std::endl;
@@ -137,28 +173,34 @@ private:
                          [] (const Data&, const security::ValidationError& error) {
                            std::cout << "Error authenticating data: " << error << std::endl;
                          });
+    */
+    std::cerr << "\n<< final D:  "
+              << std::string(reinterpret_cast<const char*>(data.getContent().value()),
+                                                           data.getContent().value_size())
+              << std::endl;
   }
 
   void
-  onNack(const Interest&, const lp::Nack& nack) const
+  Consumer::onNack(const Interest&, const lp::Nack& nack) const
   {
     std::cout << "Received Nack with reason " << nack.getReason() << std::endl;
   }
 
   void
-  onTimeout(const Interest& interest) const
+  Consumer::onTimeout(const Interest& interest) const
   {
     std::cout << "Timeout for " << interest << std::endl;
   }
 
-private:
-  Face m_face;
-  ValidatorConfig m_validator{m_face};
-};
+//private:
+//  Face m_face;
+//  ValidatorConfig m_validator{m_face};
+//};
 
 } // namespace examples
 } // namespace ndn
 
+/*
 int
 main(int argc, char** argv)
 {
@@ -172,3 +214,4 @@ main(int argc, char** argv)
     return 1;
   }
 }
+*/

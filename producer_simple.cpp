@@ -54,32 +54,56 @@ private:
   void
   onInterest(const InterestFilter&, const Interest& interest)
 
-  {     std::cout << interest.hasApplicationParameters() << std::endl;
+  {     
+    if( interest.hasApplicationParameters() ) {
 
-    std::cout << ">> I: " << interest << std::endl;
-    std::cout << " \n app params: " << std::endl;
-    Block b = interest.getApplicationParameters();
-    //b.decode();
-    
-    b.parse();
-    for (Block x : b.elements()){
-      std::cout << x.type() << std::endl;
-    }
+      //std::cout << ">> I: " << interest << std::endl;
+      std::cout << " \n app params: " << std::endl;
+      Block b = interest.getApplicationParameters();
+      //b.decode();
+      b.parse();
+      /*
+      for (Block x : b.elements()){
+        std::cout << x.type() << std::endl;
+      }
+      */
+      int type = b.elements()[0].type();
+      std::string content;
+      switch(type){
+        case 129:{
+          auto c = b.get(b.elements()[0].type());
+          std::string s =std::string(reinterpret_cast<const char*>(c.value()), c.value_size());
+          //std::string input = parseAppParams();
+          content="Sum is: ";
+          std::cout << s << std::endl;
+          break;}
+        default:
+         std::cout << "unknown type" << std::endl;
+         content="Hello, world!";
+         break;
+      }
 
 
-    auto c = b.get(b.elements()[0].type());
-
-    std::string s =std::string(reinterpret_cast<const char*>(c.value()), c.value_size());
-
-     std::cout << s << std::endl;
-
-
-    static const std::string content("Hello, world!");
-
-    // Create Data packet
     auto data = make_shared<Data>(interest.getName());
     data->setFreshnessPeriod(10_s);
     data->setContent(make_span(reinterpret_cast<const uint8_t*>(content.data()), content.size()));
+
+    m_keyChain.sign(*data);
+    // m_keyChain.sign(*data, signingByIdentity(<identityName>));
+    // m_keyChain.sign(*data, signingByKey(<keyName>));
+    // m_keyChain.sign(*data, signingByCertificate(<certName>));
+    // m_keyChain.sign(*data, signingWithSha256());
+
+    // Return Data packet to the requester
+    std::cout << "<< D: " << *data << std::endl;
+    m_face.put(*data);
+    }
+
+  
+    //static const std::string content("Hello, world!");
+
+    // Create Data packet
+    
 
     // in order for the consumer application to be able to validate the packet, you need to setup
     // the following keys:
@@ -94,15 +118,7 @@ private:
     //         ndnsec sign-req /example/testApp | ndnsec cert-gen -s /example -i example | ndnsec cert-install -
 
     // Sign Data packet with default identity
-    m_keyChain.sign(*data);
-    // m_keyChain.sign(*data, signingByIdentity(<identityName>));
-    // m_keyChain.sign(*data, signingByKey(<keyName>));
-    // m_keyChain.sign(*data, signingByCertificate(<certName>));
-    // m_keyChain.sign(*data, signingWithSha256());
-
-    // Return Data packet to the requester
-    std::cout << "<< D: " << *data << std::endl;
-    m_face.put(*data);
+    
   }
 
   void

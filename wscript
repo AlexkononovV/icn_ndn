@@ -33,13 +33,18 @@ def build (bld):
         source='consumer_v2.cpp',
         use='NDN_CXX')
     
-    bld(target='consumer_simple',
-        features=['cxx', 'cxxprogram'],
-        source='consumer_simple.cpp',
-        use='NDN_CXX')
+    #bld(target='consumer_simple',
+    #    features=['cxx', 'cxxprogram'],
+    #    source='consumer_simple.cpp',
+    #    use='NDN_CXX')
     bld(target='producer_simple',
         features=['cxx', 'cxxprogram'],
         source='producer_simple.cpp',
         use='NDN_CXX')
+    bld(target='testApp',
+        features=['cxx', 'cxxprogram'],
+        source=['testApp.cpp','consumer_simple.cpp'],
+        use='NDN_CXX')
+
 
 
