@@ -19,10 +19,10 @@ class Consumer
 public:
 	Consumer();
 
-	void setPrefix(std::string pref);
+	void functionPrefix(std::string pref);
 	void explicitParameters(bool value);
-	void setParameters(std::string params);
-	int execute();
+	void setArguments(std::vector<std::string> args);
+	std::string execute();
 
 private:
   void run();
@@ -43,6 +43,7 @@ private:
   ValidatorConfig m_validator{m_face};
   std::string prefix="";
   bool explicit_input = true;
+  //std::vector<std::string> params;
   std::string params;
   RegisteredPrefixHandle m_prefixId;
   KeyChain m_keyChain;

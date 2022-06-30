@@ -105,25 +105,38 @@ namespace examples {
     //error: ‘class ndn::Face’ has no member named ‘unsetInterestFilter’
   }
 
-  void Consumer::setPrefix(std::string pref)
+  void Consumer::functionPrefix(std::string pref)
   {
     prefix = pref;
   }
-  void Consumer::explicitParameters(bool value){
-    explicit_input=value;
+
+  void Consumer::setArguments(std::vector<std::string> args){
+
+    size_t size = sizeof(args[0])*args.size();
+    if(size < 1100){
+      explicit_input=true; 
+      params= "{ 'input':'explicit', 'data': [";
+      for( auto s : args ){
+        params += (std::string) s + ",";
+      }
+      params += "]}";
+    }
+    else{
+      explicit_input=false;
+      params = "{'input':'implicit', 'prefix': '";
+      params +="/consumer/id";
+      params += "'}";
+    }
+      
   }
 
-  void Consumer::setParameters(std::string parms){
-    params = parms;    
-  }
+  std::string Consumer::execute(){
 
-  int Consumer::execute(){
-
-    if(prefix.empty())
+    /*if(prefix.empty())
     {
       std::cout << "ERROR: no function prefix given" << std::endl;
       return 0;
-    }
+    }*/
 
     Name interestName(prefix);
     interestName.appendVersion();
@@ -134,7 +147,7 @@ namespace examples {
       auto a = Buffer(params.data(),params.size());
       auto m = std::make_shared<Buffer>(a);
 
-      Block b((uint32_t)129, m);
+      Block b((uint32_t)130, m);
       b.encode();      
       interest.setApplicationParameters( b);
     }

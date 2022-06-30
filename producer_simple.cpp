@@ -70,7 +70,7 @@ private:
       int type = b.elements()[0].type();
       std::string content;
       switch(type){
-        case 129:{
+        case 130:{
           auto c = b.get(b.elements()[0].type());
           std::string s =std::string(reinterpret_cast<const char*>(c.value()), c.value_size());
           //std::string input = parseAppParams();
