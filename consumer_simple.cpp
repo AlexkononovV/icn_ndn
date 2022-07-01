@@ -32,6 +32,11 @@
 #include "consumer_simple.hpp"
 #include <boost/regex.hpp>
 
+#include <nlohmann/json.hpp>
+
+// for convenience
+using json = nlohmann::json;
+
 
 // Enclosing code in ndn simplifies coding (can also use `using namespace ndn`)
 namespace ndn {
@@ -114,18 +119,31 @@ namespace examples {
 
     size_t size = sizeof(args[0])*args.size();
     if(size < 1100){
-      explicit_input=true; 
+      /*explicit_input=true; 
       params= "{ 'input':'explicit', 'data': [";
       for( auto s : args ){
         params += (std::string) s + ",";
       }
       params += "]}";
+      */
+
+      json data;
+      data["input"]="explicit";
+      for(std::string s:args){
+        data["data"].push_back(stoi(s));
+      }
+      params = data.dump();
+      std::cout << params << std::endl;
     }
     else{
       explicit_input=false;
-      params = "{'input':'implicit', 'prefix': '";
+      /*params = "{'input':'implicit', 'prefix': '";
       params +="/consumer/id";
-      params += "'}";
+      params += "'}";*/
+      json data;
+      data["input"]="implicit";
+      data["prefix"]="/consumer/id";
+      params = data.dump();
     }
       
   }

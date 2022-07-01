@@ -25,6 +25,12 @@
 
 #include <iostream>
 
+
+#include <nlohmann/json.hpp>
+
+// for convenience
+using json = nlohmann::json;
+
 // Enclosing code in ndn simplifies coding (can also use `using namespace ndn`)
 namespace ndn {
 // Additional nested namespaces should be used to prevent/limit name conflicts
@@ -74,8 +80,16 @@ private:
           auto c = b.get(b.elements()[0].type());
           std::string s =std::string(reinterpret_cast<const char*>(c.value()), c.value_size());
           //std::string input = parseAppParams();
-          content="Sum is: ";
           std::cout << s << std::endl;
+          json params;
+          params = json::parse(s);
+          std::cout << params << std::endl;
+          std::vector<int> args = params["data"].get<std::vector<int>>();
+          int sum=0;
+          for(int i:args){
+            sum+= (int)i;
+          }
+          content="Sum is: "+std::to_string(sum);
           break;}
         default:
          std::cout << "unknown type" << std::endl;
