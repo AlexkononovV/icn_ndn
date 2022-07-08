@@ -8,6 +8,12 @@
 #include <bitset>
 #include <ndn-cxx/encoding/buffer.hpp>
 
+#include <boost/uuid/uuid.hpp>            // uuid class
+#include <boost/uuid/uuid_generators.hpp> // generators
+#include <boost/uuid/uuid_io.hpp>         // streaming operators etc.
+#include "boost/lexical_cast.hpp"
+
+#include <map>
 
 // Enclosing code in ndn simplifies coding (can also use `using namespace ndn`)
 namespace ndn {
@@ -19,19 +25,21 @@ class Consumer
 public:
 	Consumer();
 
-	void functionPrefix(std::string pref);
+	std::string functionPrefix(std::string pref);
 	void explicitParameters(bool value);
-	void setArguments(std::vector<std::string> args);
-	std::string execute();
+	void setArguments(std::string id, std::vector<const char*>); //td::vector<std::string> args);
+  std::string getResponse(std::string id);
+	void execute(std::string id);
 
 private:
   void run();
   void onPrefixRegistered(const Name& prefix);
   void onRegisterFailed(const Name& prefix, const std::string& reason);
   void onInterest(const InterestFilter& filter, const Interest& i2);
+  void fetchResult(std::string id);
 
 
-  void onData(const Interest&, const Data& data);
+  void onData(const Interest&, const Data& data, std::string id);
 
   void
   onNack(const Interest&, const lp::Nack& nack) const;
@@ -41,13 +49,17 @@ private:
 
   Face m_face;
   ValidatorConfig m_validator{m_face};
-  std::string prefix="";
-  bool explicit_input = true;
+  //std::string prefix="";
+  //bool explicit_input = true;
   //std::vector<std::string> params;
-  std::string params;
+  //std::string params;
   RegisteredPrefixHandle m_prefixId;
   KeyChain m_keyChain;
   //std::string *parameters = NULL;
+  std::map<std::string, std::string>requests;
+  std::map<std::string, std::string>prefixes;
+  std::map<std::string, std::string> args;
+  std::map<std::string, std::string> mem;
 };
 }
 }

@@ -34,6 +34,11 @@
 
 #include <nlohmann/json.hpp>
 
+#include <boost/uuid/uuid.hpp>            // uuid class
+#include <boost/uuid/uuid_generators.hpp> // generators
+#include <boost/uuid/uuid_io.hpp>         // streaming operators etc.
+#include <map>
+
 // for convenience
 using json = nlohmann::json;
 
@@ -57,13 +62,13 @@ namespace examples {
    {
     
     //m_currentSeqNo=0;
-    m_prefixId = m_face.setInterestFilter("/consumer/id",
+    m_prefixId = m_face.setInterestFilter("/consumer/sum/1",
                              std::bind(&Consumer::onInterest, this, _1, _2),
                              //RegisterPrefixSuccessCallback(),
                              std::bind(&Consumer::onPrefixRegistered, this, _1),
                              std::bind(&Consumer::onRegisterFailed, this, _1, _2));
 
-    m_face.processEvents();
+    //m_face.processEvents();
 
   }
 
@@ -82,43 +87,133 @@ namespace examples {
   }
 
   void
-  Consumer::onInterest(const InterestFilter& filter, const Interest& i2){
+  Consumer::onInterest(const InterestFilter& filter, const Interest& interest){
+      
+    if( interest.hasApplicationParameters() ) {
 
-    std::cout << "\n << I for input \n"  << std::endl;
+      //std::cout << ">> I: " << interest << std::endl;
+      std::cout << " \n app params: " << std::endl;
 
-    
-    Name dataName(i2.getName());
+      Block b = interest.getApplicationParameters();
+      b.parse();
+      auto c = b.get(b.elements()[0].type());
+      std::string s =std::string(reinterpret_cast<const char*>(c.value()), c.value_size());
 
-    std::string in;
-    std::cout << "input: ";
-    getline (std::cin, in);
-    static const std::string content = in;
+      std::cout << s << std::endl;
 
-    shared_ptr<Data> data = make_shared<Data>();
-    data->setName(dataName);
-    data->setFreshnessPeriod(10_s); 
-    data->setContent(make_span(reinterpret_cast<const uint8_t*>(content.data()), content.size()));
+      int type = b.elements()[0].type();
+      
+      std::string content;
+      json resp;
+      json params;
+      params = json::parse(s);
 
-    // Sign Data packet with default identity
-    m_keyChain.sign(*data);
+      switch(type){
+        case 140:{
+          std::cout << "interest type 140 " << std::endl;
+          //std::string input = parseAppParams();
+          std::string id = params["id"];
+          resp["id"]=id;
+          resp["data"]= mem[id];
+          content=resp.dump();
 
-    m_face.put(*data);
+          auto data = make_shared<Data>(interest.getName());
+          data->setFreshnessPeriod(10_s);
+          data->setContent(make_span(reinterpret_cast<const uint8_t*>(content.data()), content.size()));
 
-    std::cout << ">> sent D with input "  << std::endl;
+          m_keyChain.sign(*data);
 
-    //m_face.unsetInterestFilter(m_prefixId);
-    //error: ‘class ndn::Face’ has no member named ‘unsetInterestFilter’
+          m_face.put(*data);
+
+          std::cout << "<< D: " << content << std::endl;
+          m_face.processEvents(); ///!!! com isto aqui responde ao interest 140 mas nao ao 141
+          break;
+        }
+        case 141: {
+          std::cout << "interest type 141 " << std::endl;
+          std::string id = params["id"];
+          resp["id"]=id;
+          resp["response"]= "ACK";
+          content=resp.dump();
+          content = resp.dump();
+
+          auto data = make_shared<Data>(interest.getName());
+          data->setFreshnessPeriod(10_s);
+          data->setContent(make_span(reinterpret_cast<const uint8_t*>(content.data()), content.size()));
+
+          m_keyChain.sign(*data);
+
+          std::cout << "<< D: " << *data << std::endl;
+          m_face.put(*data);
+          //m_face.processEvents();
+          std::cout << "data response to 141 sent" << std::endl;
+          //-----------------------------------------
+          fetchResult(id);
+          
+          break;
+        }
+        default:
+         json resp;
+         resp["error"]="unknown TLV type";
+         content=resp.dump();
+         break;
+      }
+    }
+  }
+  
+  void
+  Consumer::fetchResult(std::string id){
+    json d;
+    d["id"]=id;
+    std::string str = d.dump();
+    auto a2 = Buffer(str.data(),str.size());
+    auto m2 = std::make_shared<Buffer>(a2);
+
+    Block b2((uint32_t)132, m2);
+    b2.encode();  
+
+    Name interestName(prefixes[id]);
+    interestName.appendVersion();
+    Interest interest(interestName);
+
+    interest.setApplicationParameters( b2);
+    interest.setMustBeFresh(true);
+    interest.setInterestLifetime(6_s); // The default is 4 seconds
+
+    std::cout << "Sending Interest " << interest << std::endl;
+    m_face.expressInterest(interest,
+                           std::bind(&Consumer::onData, this,  _1, _2, id),
+                           std::bind(&Consumer::onNack, this, _1, _2),
+                           std::bind(&Consumer::onTimeout, this, _1));
+    // processEvents will block until the requested data is received or a timeout occurs
+    m_face.processEvents();
   }
 
-  void Consumer::functionPrefix(std::string pref)
+  std::string
+  Consumer::functionPrefix(std::string pref)
   {
-    prefix = pref;
+    //prefix = pref;
+    boost::uuids::uuid uuid = boost::uuids::random_generator()();
+    std::string id = boost::lexical_cast<std::string>(uuid);
+
+    requests[id] = ""; //resultado da execução 
+    prefixes[id] = pref; //prefixo da função para ser executada
+    args[id]="";  // buffer para colocar argumentos de input 
+    mem[id] = "";
+    return id;
+
   }
 
-  void Consumer::setArguments(std::vector<std::string> args){
+  void Consumer::setArguments(std::string id, std::vector<const char*>arguments){ //std::vector<std::string> arguments){
 
-    size_t size = sizeof(args[0])*args.size();
-    if(size < 1100){
+    //size_t size = sizeof(arguments[0])*arguments.size();
+    size_t size = sizeof(arguments[0]) * arguments.size();
+    /*for (std::vector<const char*>::const_iterator cit = arguments.begin(); cit != arguments.end(); ++cit) {
+        size += sizeof cit;
+    }*/
+
+    std::cout << "size of args : " << size << std::endl;
+    if(size < 80){
       /*explicit_input=true; 
       params= "{ 'input':'explicit', 'data': [";
       for( auto s : args ){
@@ -129,26 +224,43 @@ namespace examples {
 
       json data;
       data["input"]="explicit";
-      for(std::string s:args){
-        data["data"].push_back(stoi(s));
-      }
-      params = data.dump();
-      std::cout << params << std::endl;
+      //for(std::string s:arguments){
+      //  data["data"].push_back(stoi(s));
+      //}
+      data["data"]=arguments;
+
+      args[id] = data.dump();
+  
     }
     else{
-      explicit_input=false;
+      //explicit_input=false;
       /*params = "{'input':'implicit', 'prefix': '";
       params +="/consumer/id";
       params += "'}";*/
+      
+      json aux;
+      aux["data"] = arguments;
+
       json data;
       data["input"]="implicit";
-      data["prefix"]="/consumer/id";
-      params = data.dump();
-    }
+      //data["data"]=arguments;
+      mem[id] = aux["data"].dump();
+      data["prefix"]="/consumer/sum/1";
+      data["data"] = id;
+      args[id] = data.dump();
       
   }
+}
 
-  std::string Consumer::execute(){
+  std::string
+  Consumer::getResponse(std::string id){
+    
+    return requests[id];
+  }
+
+
+  void
+  Consumer::execute(std::string id){
 
     /*if(prefix.empty())
     {
@@ -156,13 +268,18 @@ namespace examples {
       return 0;
     }*/
 
-    Name interestName(prefix);
+    Name interestName(prefixes[id]);
     interestName.appendVersion();
     Interest interest(interestName);
     
     //std::string name("testing9");
-    if (explicit_input){
-      auto a = Buffer(params.data(),params.size());
+
+    json data;
+    data = json::parse(args[id]);
+
+    if (data["input"] == "explicit"){
+      std::string s = data.dump();
+      auto a = Buffer(s.data(),s.size());
       auto m = std::make_shared<Buffer>(a);
 
       Block b((uint32_t)130, m);
@@ -171,11 +288,13 @@ namespace examples {
     }
     else{
       run();
-      std::string msg = "/consumer/id";
-      auto a = Buffer(msg.data(),msg.size());
+      std::string s = data.dump();
+      auto a = Buffer(s.data(),s.size());
       auto m = std::make_shared<Buffer>(a);
 
       Block b((uint32_t)131, m);
+      b.encode();      
+      interest.setApplicationParameters( b);
     }
 
     interest.setMustBeFresh(true);
@@ -183,19 +302,22 @@ namespace examples {
 
     std::cout << "Sending Interest " << interest << std::endl;
     m_face.expressInterest(interest,
-                           std::bind(&Consumer::onData, this,  _1, _2),
+                           std::bind(&Consumer::onData, this,  _1, _2, id),
                            std::bind(&Consumer::onNack, this, _1, _2),
                            std::bind(&Consumer::onTimeout, this, _1));
 
     // processEvents will block until the requested data is received or a timeout occurs
     m_face.processEvents();
+    
+    //generate id for fetching results
+    
   }
 
 //private:
   void
-  Consumer::onData(const Interest&, const Data& data)
+  Consumer::onData(const Interest&, const Data& data, std::string id)
   {
-    std::cout << "Received Data " << data << std::endl;
+    //std::cout << "Received Data " << data << std::endl;
     /*
     m_validator.validate(data,
                          [] (const Data&) {
@@ -205,10 +327,31 @@ namespace examples {
                            std::cout << "Error authenticating data: " << error << std::endl;
                          });
     */
-    std::cerr << "\n<< final D:  "
-              << std::string(reinterpret_cast<const char*>(data.getContent().value()),
-                                                           data.getContent().value_size())
+    std::string resp = std::string(reinterpret_cast<const char*>(data.getContent().value()),data.getContent().value_size());
+
+    std::cerr << "\n<<D:  "
+              << resp
               << std::endl;
+
+    json response;
+    response = json::parse(resp);
+
+    auto error = response.find("error");
+    if( error != response.end() ) {
+      std::cout << "ERROR: " << response["error"] << std::endl;
+      return;
+    }
+    auto result = response.find("response");
+    if( result != response.end() ) {
+      requests[id] = response["response"].dump();
+      return;
+    }
+    auto ack = response.find("ACK");
+    if( ack != response.end() ) {
+      std::cout << "\n waiting for interest to fetch input" << std::endl;
+      //m_face.processEvents();
+      //return;
+    }
   }
 
   void
