@@ -14,7 +14,7 @@ def configure(conf):
                    uselib_store='NDN_CXX', global_define=True, mandatory=True)
 
 def build (bld):
-    bld(target='producer_v1',
+    '''bld(target='producer_v1',
         features=['cxx', 'cxxprogram'],
         source=['producer_v1.cpp','ExecInstance.cpp'],
         use='NDN_CXX')
@@ -32,11 +32,12 @@ def build (bld):
         features=['cxx', 'cxxprogram'],
         source='consumer_v2.cpp',
         use='NDN_CXX')
-    
-    #bld(target='consumer_simple',
-    #    features=['cxx', 'cxxprogram'],
-    #    source='consumer_simple.cpp',
-    #    use='NDN_CXX')
+    '''
+    '''bld(target='consumer_simple',
+        features=['cxx', 'cxxprogram'],
+        source='consumer_simple.cpp',
+        use='NDN_CXX')
+    '''
     bld(target='producer_simple',
         features=['cxx', 'cxxprogram'],
         source='producer_simple.cpp',

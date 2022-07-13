@@ -15,6 +15,10 @@
 
 #include <map>
 
+#include <nlohmann/json.hpp>
+
+using json = nlohmann::json;
+
 // Enclosing code in ndn simplifies coding (can also use `using namespace ndn`)
 namespace ndn {
 // Additional nested namespaces should be used to prevent/limit name conflicts
@@ -27,7 +31,7 @@ public:
 
 	std::string functionPrefix(std::string pref);
 	void explicitParameters(bool value);
-	void setArguments(std::string id, std::vector<const char*>); //td::vector<std::string> args);
+	void setArguments(std::string id, const char* arg, int length);//std::vector< unsigned char> arguments); 
   std::string getResponse(std::string id);
 	void execute(std::string id);
 
@@ -59,7 +63,11 @@ private:
   std::map<std::string, std::string>requests;
   std::map<std::string, std::string>prefixes;
   std::map<std::string, std::string> args;
-  std::map<std::string, std::string> mem;
+  std::map<std::string, const char*> data_vec; //std::vector< unsigned char>> data_vec;
+  std::map<std::string, int> data_length;
+  std::map<std::string, bool> type_input;
+  //std::map<std::string, std::string> mem;
+  json mem;
 };
 }
 }

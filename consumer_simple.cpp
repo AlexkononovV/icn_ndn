@@ -39,6 +39,7 @@
 #include <boost/uuid/uuid_io.hpp>         // streaming operators etc.
 #include <map>
 
+
 // for convenience
 using json = nlohmann::json;
 
@@ -126,7 +127,7 @@ namespace examples {
           m_face.put(*data);
 
           std::cout << "<< D: " << content << std::endl;
-          m_face.processEvents(); ///!!! com isto aqui responde ao interest 140 mas nao ao 141
+          //m_face.processEvents(); ///!!! com isto aqui responde ao interest 140 mas nao ao 141
           break;
         }
         case 141: {
@@ -160,7 +161,7 @@ namespace examples {
       }
     }
   }
-  
+
   void
   Consumer::fetchResult(std::string id){
     json d;
@@ -186,7 +187,7 @@ namespace examples {
                            std::bind(&Consumer::onNack, this, _1, _2),
                            std::bind(&Consumer::onTimeout, this, _1));
     // processEvents will block until the requested data is received or a timeout occurs
-    m_face.processEvents();
+    //m_face.processEvents();
   }
 
   std::string
@@ -204,49 +205,36 @@ namespace examples {
 
   }
 
-  void Consumer::setArguments(std::string id, std::vector<const char*>arguments){ //std::vector<std::string> arguments){
+  void Consumer::setArguments(std::string id, const char* arguments, int length){ //std::vector<unsigned char> arguments){ 
 
     //size_t size = sizeof(arguments[0])*arguments.size();
-    size_t size = sizeof(arguments[0]) * arguments.size();
+    // ---->size_t size = sizeof(arguments) * length;
+    //int size = strlen((const char*)arguments);
+    int size = sizeof arguments * length;
     /*for (std::vector<const char*>::const_iterator cit = arguments.begin(); cit != arguments.end(); ++cit) {
         size += sizeof cit;
     }*/
 
     std::cout << "size of args : " << size << std::endl;
     if(size < 80){
-      /*explicit_input=true; 
-      params= "{ 'input':'explicit', 'data': [";
-      for( auto s : args ){
-        params += (std::string) s + ",";
-      }
-      params += "]}";
-      */
 
       json data;
       data["input"]="explicit";
-      //for(std::string s:arguments){
-      //  data["data"].push_back(stoi(s));
-      //}
-      data["data"]=arguments;
+      /*
+      data_vec[id] = arguments;
 
-      args[id] = data.dump();
+      args[id] = data.dump();*/
+      type_input[id]=1;
+      data_vec[id] = arguments;
+      data_length[id]=length;
   
     }
     else{
-      //explicit_input=false;
-      /*params = "{'input':'implicit', 'prefix': '";
-      params +="/consumer/id";
-      params += "'}";*/
-      
-      json aux;
-      aux["data"] = arguments;
 
       json data;
       data["input"]="implicit";
-      //data["data"]=arguments;
-      mem[id] = aux["data"].dump();
       data["prefix"]="/consumer/sum/1";
-      data["data"] = id;
+      data["id"] = id;
       args[id] = data.dump();
       
   }
@@ -274,27 +262,75 @@ namespace examples {
     
     //std::string name("testing9");
 
-    json data;
-    data = json::parse(args[id]);
+    /*json data;
+    data = json::parse(args[id]);*/
 
-    if (data["input"] == "explicit"){
-      std::string s = data.dump();
-      auto a = Buffer(s.data(),s.size());
-      auto m = std::make_shared<Buffer>(a);
+    if (type_input[id]){
+      std::cout << "implicit arguments" << std::endl;
+      //std::string s = data.dump();
+      //std::vector< unsigned char> aux = data_vec[id]; //data["data"]; //.get<std::vector<const char*>>();
+      const char* aux = data_vec[id];
+      int size = sizeof aux * data_length[id];
+      std::cout << "size of buffer: " << size << std::endl;
+      //auto a = Buffer(aux.data(),aux.size());
+      auto a_buf = Buffer(aux, size);
+      auto b_buf = std::make_shared<Buffer>(a_buf);
+      Block buffer((uint32_t)300, b_buf);
+      buffer.encode();
 
-      Block b((uint32_t)130, m);
-      b.encode();      
-      interest.setApplicationParameters( b);
+      int length = data_length[id];
+      /*std::vector<unsigned char> length_arr(4);
+      for (int i = 0; i < 4; i++)
+      {     length_arr[3 - i] = (length >> (i * 8));
+       }*/
+      const char* bytes = reinterpret_cast<const char*>(&length);
+      auto a2_buf = Buffer(bytes, 4); //length_arr.data(), length_arr.size());
+      auto b2_buf = std::make_shared<Buffer>(a2_buf);
+      Block length_block((uint32_t)301, b2_buf);
+      length_block.encode();
+
+      Block data((uint32_t)200);
+      data.insert(data.elements_end() ,buffer);
+      data.insert(data.elements_end() ,length_block);
+      data.encode();
+
+      int type=130;
+
+      Block appParam((uint32_t)type);
+      //b.push_back(tst);  
+      //std::cout << "elementa_end = " << b.elements_end() << std::endl;
+      //out.insert(b.elements_end() ,tst);
+      appParam.insert(appParam.elements_end() ,data);
+      appParam.encode();      
+      interest.setApplicationParameters( appParam);
     }
     else{
       run();
-      std::string s = data.dump();
-      auto a = Buffer(s.data(),s.size());
-      auto m = std::make_shared<Buffer>(a);
 
-      Block b((uint32_t)131, m);
-      b.encode();      
-      interest.setApplicationParameters( b);
+      std::string id = "id"; //data["id"];
+      std::string prefix = "prefix"; //data["prefix"];
+
+      auto a = Buffer(id.data(),id.size());
+      auto b = std::make_shared<Buffer>(a);
+      Block id_block((uint32_t)201, b);
+      id_block.encode();
+
+      auto a2 = Buffer(prefix.data(),prefix.size());
+      auto b2 = std::make_shared<Buffer>(a2);
+      Block prefix_block((uint32_t)210, b2);
+      prefix_block.encode();
+
+
+      int type=131;
+      //if( type == 1){t=131; }
+      //else if (type ==2 ){t=151; }
+
+      Block appParam((uint32_t)type);
+      
+      appParam.insert(appParam.elements_end() ,id_block);
+      appParam.insert(appParam.elements_end() ,prefix_block);
+      appParam.encode();      
+      interest.setApplicationParameters( appParam);
     }
 
     interest.setMustBeFresh(true);
@@ -327,15 +363,18 @@ namespace examples {
                            std::cout << "Error authenticating data: " << error << std::endl;
                          });
     */
-    std::string resp = std::string(reinterpret_cast<const char*>(data.getContent().value()),data.getContent().value_size());
+    /*std::string resp = std::string(reinterpret_cast<const char*>(data.getContent().value()),data.getContent().value_size());
 
     std::cerr << "\n<<D:  "
               << resp
               << std::endl;
-
-    json response;
-    response = json::parse(resp);
-
+    */
+    Block response = data.getContent();
+    response.parse();
+    int type = response.elements()[0].type();
+    //json response;
+    //response = json::parse(resp);
+    /*
     auto error = response.find("error");
     if( error != response.end() ) {
       std::cout << "ERROR: " << response["error"] << std::endl;
@@ -350,7 +389,27 @@ namespace examples {
     if( ack != response.end() ) {
       std::cout << "\n waiting for interest to fetch input" << std::endl;
       //m_face.processEvents();
-      //return;
+      return;
+    }*/
+    switch(type){
+        case 500:{
+          Block in = response.get(type);
+          in.parse();
+          for ( auto i2: in.elements() )
+            { 
+              std::cout << "element inside content block : " << i2 << std::endl;
+              if (i2.type() == 501){
+                auto c = in.get(501);
+                std::string s =std::string(reinterpret_cast<const char*>(c.value()), c.value_size());
+                requests[id] = s;
+              }
+            }
+
+          break;
+        }
+        default:
+         std::cout << "unknown type" << std::endl;
+         break;
     }
   }
 

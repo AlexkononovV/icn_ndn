@@ -63,42 +63,84 @@ private:
     if( interest.hasApplicationParameters() ) {
 
       //std::cout << ">> I: " << interest << std::endl;
-      std::cout << " \n app params: " << std::endl;
+      //std::cout << " \n app params: " << std::endl;
 
-      Block b = interest.getApplicationParameters();
-      b.parse();
-      auto c = b.get(b.elements()[0].type());
-      std::string s =std::string(reinterpret_cast<const char*>(c.value()), c.value_size());
-      std::cout << s << std::endl;
+      Block appParams = interest.getApplicationParameters();
+      appParams.parse();
 
-      int type = b.elements()[0].type();
-      
-      std::string content;
+      int type = appParams.elements()[0].type();   
+
+      Block content((uint32_t)500);
+      const unsigned char* buf_arg;
+      int args_length;
+
+      //_____DELETE
       json resp;
       json params;
-      params = json::parse(s);
-
+      
+      params["data"] = "data" ;//json::parse(s);
+      //__________
       switch(type){
         case 130:{
           std::cout << "interest type 130 " << std::endl;
-          //std::string input = parseAppParams();
-          if (params["input"]=="explicit"){
-            resp["response"]=Sum(s);
-            content=resp.dump();
 
-            sendData(interest.getName(),content);
+          Block in = appParams.get(type);
+          in.parse();
+          for ( auto e: in.elements() )
+          { 
+            //std::cout << "element inside app params block : " << e << std::endl;
+            if (e.type() == 200){
 
-            break;
+              Block data = in.get(200);
+              data.parse();
+
+              for(auto e2 : data.elements() )
+              {
+                if(e2.type() ==300 ){
+                  std::cout << "type 300 found: buffer" <<std::endl;
+                  Block buffer = data.get(300);
+                  // buffer.parse();
+
+                  buf_arg = reinterpret_cast<const unsigned char*>(buffer.value());
+                  
+                }
+                else if(e2.type() ==301 ){
+                  std::cout << "type 301 found: length" <<std::endl;
+                  Block length = data.get(301);
+                  //length.parse();
+                  const char* aux = reinterpret_cast<const char*>(length.value());
+                  args_length = *reinterpret_cast<const int*>(aux);
+                  //auto v = std::vector< unsigned char>(aux, aux + length.value_size());
+                  
+                  //for(auto a : v) {std::cout << (int)a << std::endl;}
+                  //std::string value(v.begin(), v.end());
+                  //std::cout << "value: " << value << std::endl;
+                  //args_length = stoi(value);
+                  std::cout << "length = " << args_length << std::endl;
+                }
+                else{
+                  std::cout << "unknown type" << std::endl;
+                }
+              }
+            }
           }
-          
+
+          content.insert(content.elements_end() , Sum(buf_arg, args_length));
+          content.encode(); 
+
+          sendData(interest.getName(),content);
+
+          break;
         }
+          
+    
         case 131: {
           if (params["input"]=="implicit"){
             std::cout << "interest type 131 " << std::endl;
             std::string prefix = params["prefix"];
             resp["ACK"]="ACK";
             resp["id"]=params["data"];
-            content = resp.dump();
+            //content = resp.dump();
 
             sendData(interest.getName(),content);
 
@@ -114,19 +156,45 @@ private:
           std::string res = results[id];
           resp["response"]=res;
           resp["id"]=id;
-          content = resp.dump();
+          //content = resp.dump();
 
           sendData(interest.getName(),content);
           break;
         }
-        default:
+        case 150:{
+          std::cout << "interest type 150 " << std::endl;
+          //std::string input = parseAppParams();
+          if (params["input"]=="explicit"){
+            
+            //content="Instantiating function";
+
+            sendData(interest.getName(),content);
+
+            break;
+          }
+          
+        }
+
+        case 151: {
+          if (params["input"]=="implicit"){
+            
+            //content = "Getting input parameters for Instantiating function";
+
+            sendData(interest.getName(),content);
+
+            break;
+          }
+        }
+        default:{
          json resp;
          resp["error"]="unknown TLV type";
-         content=resp.dump();
+         //content=resp.dump();
          break;
+       }
       }
     
     }
+  }
 
     //static const std::string content("Hello, world!");
 
@@ -147,7 +215,7 @@ private:
 
     // Sign Data packet with default identity
     
-  }
+  
 
   std::string
   fetchInput(std::string prefix, std::string id){
@@ -159,7 +227,7 @@ private:
 
     sendInterest(prefix, s, 140);
 
-}
+  }
 
   void
   onData(const Interest&, const Data& data, std::string prefix)
@@ -193,8 +261,9 @@ private:
     if( result != response.end() ) {
       std::cout << "\n recevied data with input" << std::endl;
       std::string input = response["data"].dump();
-      std::string result = Sum(resp);
+      std::string result = "result";//Sum(resp);
       results[response["id"]] = result;
+      std::cout << "result sum: " << results[response["id"]] << std::endl;
       json content;
       content["id"] = response["id"];
       content["response"] = "READY";
@@ -232,28 +301,37 @@ private:
     m_face.shutdown();
   }
 
-  std::string
-  Sum(std::string args){
-    json params;
-    params = json::parse(args);
-    auto values = params["data"];
-    std::cout << values << std::endl;
-    int sum=0;
-    for(std::string i : values){
-      std::cout << i << std::endl;
-      std::stringstream ss(i);
-      int num;
-      ss >> num;
-      sum += num;
-      /*
-      std::stringstream strValue;
-      strValue << i;
-      int intValue;
-      strValue >> intValue;
-      sum+= intValue;
-    */
+  Block
+  Sum(const unsigned char* bytes, size_t size){
+
+    //auto v = std::vector< unsigned char>(vector, vector + size);
+
+    std::vector<unsigned char> byteVec(bytes, bytes + sizeof(float) * size);
+
+    unsigned char* bytes2 = &(byteVec[0]);    // point to beginning of memory
+    float* floatArray = reinterpret_cast<float*>(bytes2);
+
+    float sum = 0;
+    for (int i = 0; i < size; i++){
+        std::cout << "after:"<< floatArray[i] << std::endl; 
+        sum += floatArray[i];
     }
-    return std::to_string(sum);
+
+    /*int sum=0;
+    for(auto i : v){
+      std::cout << std::to_string(i) << std::endl;
+      sum+= (int) i;
+    
+    }*/
+
+    std::cout << "return from Sum(arg) : " << sum << std::endl;
+    std::string result = std::to_string(sum);
+
+    auto a = Buffer(result.data(),result.size());
+    auto b = std::make_shared<Buffer>(a);
+    Block res((uint32_t)501, b);
+    res.encode();
+    return res;
   }
 
 
@@ -287,10 +365,10 @@ private:
   }
 
   void
-  sendData(const Name& prefix, std::string content){
+  sendData(const Name& prefix, Block content /*std::string content*/){
     auto data = make_shared<Data>(prefix);
     data->setFreshnessPeriod(10_s);
-    data->setContent(make_span(reinterpret_cast<const uint8_t*>(content.data()), content.size()));
+    data->setContent( content);//make_span(reinterpret_cast<const uint8_t*>(content.data()), content.size()));
 
     m_keyChain.sign(*data);
     // m_keyChain.sign(*data, signingByIdentity(<identityName>));

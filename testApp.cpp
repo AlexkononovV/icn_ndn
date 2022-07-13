@@ -22,43 +22,51 @@ main(int argc, char** argv){
 
 	std::cout << "Program to numbers. " << std::endl;
 	std::string a;
-	std::vector<std::string> args;
+	std::vector<float> args;
 	do {
 		std::cin >> a ;
 		if( a == "end"){
 			break;
 		}
 		else{
-			args.push_back(a);
+			args.push_back(std::stof(a));
 		}
 	}
 	while (true);
-	
-	/*nt b,  a;
-	std::cout << " 1st value: ";
-	std::cin >> a ;
-	std::cout << " 2nd value: ";
-	std::cin >> b;
 
-	std::vector<std::string> args;
 
-	args.push_back(std::to_string(a));
-	args.push_back(std::to_string(b)) ;
-*/
-	//std::cout << sizeof(args[1])*args.size() << std::endl;
+	/*std::vector< unsigned char> vec;
+	vec.reserve(args.size());
+
+	for(auto const& s: args)
+    {vec.push_back(( unsigned char) std::stoull(s, NULL, 10));}
+	*/
+
+
+
+	//std::vector<float> myf;
+	//myf.push_back(1.0f);
+	//myf.push_back(2.0f);
+	//myf.push_back(300.0f);
+	int length = args.size();
+	for(auto f:args){ std::cout << "before:"<< f << std::endl; }
+
+	const char* bytes = reinterpret_cast<const char*>(&args[0]);
+
+	/*std::vector<unsigned char> byteVec(bytes, bytes + sizeof(float) * size);
+
+	unsigned char* bytes2 = &(byteVec[0]);    // point to beginning of memory
+	float* floatArray = reinterpret_cast<float*>(bytes2);
+
+	for (int i = 0; i < 3; i++)
+	    std::cout << "after:"<< floatArray[i] << std::endl;  // error here
+	*/
+
 
 	ndn::examples::Consumer consumer; //();
 	std::string id = consumer.functionPrefix("/example/test/function");
 
-
-	std::vector<const char*> buff(args.size(),nullptr);
-	
-	for (int i=0; i<args.size();i++) {
-	    buff[i]= args[i].c_str();
-	}
-	//std::cout << charVec << std::endl;
-
-	consumer.setArguments(id, buff);
+	consumer.setArguments(id, bytes, length);
 	consumer.execute(id);
 	while (consumer.getResponse(id) == "" ) {
 		std::cout << "waiting..." << std::endl;
