@@ -49,7 +49,7 @@ main(int argc, char** argv){
 	//myf.push_back(2.0f);
 	//myf.push_back(300.0f);
 	int length = args.size();
-	for(auto f:args){ std::cout << "before:"<< f << std::endl; }
+	//for(auto f:args){ std::cout << "before:"<< f << std::endl; }
 
 	const char* bytes = reinterpret_cast<const char*>(&args[0]);
 
@@ -65,9 +65,11 @@ main(int argc, char** argv){
 
 	ndn::examples::Consumer consumer; //();
 	std::string id = consumer.functionPrefix("/example/test/function");
-
+	std::cout << "consumer id: " << id << std::endl;
 	consumer.setArguments(id, bytes, length);
+
 	consumer.execute(id);
+	std::cout << "AFTER EXECUTE" << id << std::endl;
 	while (consumer.getResponse(id) == "" ) {
 		std::cout << "waiting..." << std::endl;
 		sleep(100);

@@ -95,68 +95,87 @@ namespace examples {
       //std::cout << ">> I: " << interest << std::endl;
       std::cout << " \n app params: " << std::endl;
 
-      Block b = interest.getApplicationParameters();
-      b.parse();
-      auto c = b.get(b.elements()[0].type());
-      std::string s =std::string(reinterpret_cast<const char*>(c.value()), c.value_size());
-
-      std::cout << s << std::endl;
-
-      int type = b.elements()[0].type();
+      Block inter = interest.getApplicationParameters();
+      inter.parse();
+      int type = inter.elements()[0].type();
       
-      std::string content;
-      json resp;
-      json params;
-      params = json::parse(s);
+      //Block content((uint32_t)520);
+      
 
       switch(type){
-        case 140:{
-          std::cout << "interest type 140 " << std::endl;
-          //std::string input = parseAppParams();
-          std::string id = params["id"];
-          resp["id"]=id;
-          resp["data"]= mem[id];
-          content=resp.dump();
+        case 132:{
+          Block in = inter.get(132);
+          in.parse();
+          std::cout << "interest type 132 " << std::endl;
+          //get id
+          Block block_id = in.get(303);
+          std::string id =std::string(reinterpret_cast<const char*>(block_id.value()), block_id.value_size());
+          
+          //get input to put in block
+          const char* aux = data_vec[id];
+          int size = sizeof aux * data_length[id];
+          auto a_buf = Buffer(aux, size);
+          auto b_buf = std::make_shared<Buffer>(a_buf);
+          Block buffer((uint32_t)300, b_buf);
+          buffer.encode();
+
+          int length = data_length[id];
+          const char* bytes = reinterpret_cast<const char*>(&length);
+          auto a2_buf = Buffer(bytes, 4); 
+          auto b2_buf = std::make_shared<Buffer>(a2_buf);
+          Block length_block((uint32_t)301, b2_buf);
+          length_block.encode();
+
+          Block data_block((uint32_t)200);
+          data_block.insert(data_block.elements_end() ,buffer);
+          data_block.insert(data_block.elements_end() ,length_block);
+          data_block.encode();
+
+          Block content((uint32_t)520);
+          content.insert(content.elements_end() ,data_block);
+          content.insert(content.elements_end() ,block_id);
+          content.encode();
 
           auto data = make_shared<Data>(interest.getName());
           data->setFreshnessPeriod(10_s);
-          data->setContent(make_span(reinterpret_cast<const uint8_t*>(content.data()), content.size()));
+          data->setContent( content );
 
           m_keyChain.sign(*data);
 
           m_face.put(*data);
 
-          std::cout << "<< D: " << content << std::endl;
+          std::cout << "<< D: " << *data << std::endl;
           //m_face.processEvents(); ///!!! com isto aqui responde ao interest 140 mas nao ao 141
           break;
         }
-        case 141: {
-          std::cout << "interest type 141 " << std::endl;
-          std::string id = params["id"];
-          resp["id"]=id;
-          resp["response"]= "ACK";
-          content=resp.dump();
-          content = resp.dump();
+        case 133: {
+          Block in = inter.get(133);
+          in.parse();
+          std::cout << "interest type 133 " << std::endl;
+          Block block_id = in.get(303);
+          std::string id =std::string(reinterpret_cast<const char*>(block_id.value()), block_id.value_size());
+
+          Block content((uint32_t)521);
+          content.insert(content.elements_end() ,block_id);
+          content.encode();
 
           auto data = make_shared<Data>(interest.getName());
           data->setFreshnessPeriod(10_s);
-          data->setContent(make_span(reinterpret_cast<const uint8_t*>(content.data()), content.size()));
+          data->setContent(content);
 
           m_keyChain.sign(*data);
 
           std::cout << "<< D: " << *data << std::endl;
           m_face.put(*data);
           //m_face.processEvents();
-          std::cout << "data response to 141 sent" << std::endl;
+          std::cout << "data response to 133 sent" << std::endl;
           //-----------------------------------------
           fetchResult(id);
-          
+          std::cout << "after fetch result 174" << std::endl;
           break;
         }
         default:
-         json resp;
-         resp["error"]="unknown TLV type";
-         content=resp.dump();
+         std::cout << "Unknown type" << std::endl;
          break;
       }
     }
@@ -164,20 +183,22 @@ namespace examples {
 
   void
   Consumer::fetchResult(std::string id){
-    json d;
-    d["id"]=id;
-    std::string str = d.dump();
-    auto a2 = Buffer(str.data(),str.size());
+    
+    auto a2 = Buffer(id.data(),id.size());
     auto m2 = std::make_shared<Buffer>(a2);
 
-    Block b2((uint32_t)132, m2);
-    b2.encode();  
+    Block id_block((uint32_t)303, m2);
+    id_block.encode();  
+
+    Block inter((uint32_t)135);
+    inter.insert(inter.elements_end() ,id_block);
+    inter.encode();
 
     Name interestName(prefixes[id]);
     interestName.appendVersion();
     Interest interest(interestName);
 
-    interest.setApplicationParameters( b2);
+    interest.setApplicationParameters( inter );
     interest.setMustBeFresh(true);
     interest.setInterestLifetime(6_s); // The default is 4 seconds
 
@@ -188,6 +209,7 @@ namespace examples {
                            std::bind(&Consumer::onTimeout, this, _1));
     // processEvents will block until the requested data is received or a timeout occurs
     //m_face.processEvents();
+    std::cout << "result fetched !!! " << std::endl;
   }
 
   std::string
@@ -201,6 +223,7 @@ namespace examples {
     prefixes[id] = pref; //prefixo da função para ser executada
     args[id]="";  // buffer para colocar argumentos de input 
     mem[id] = "";
+    consumer_prefix[id]="/consumer/sum/1";
     return id;
 
   }
@@ -214,29 +237,14 @@ namespace examples {
     /*for (std::vector<const char*>::const_iterator cit = arguments.begin(); cit != arguments.end(); ++cit) {
         size += sizeof cit;
     }*/
-
+    data_vec[id] = arguments;
+    data_length[id]=length;
     std::cout << "size of args : " << size << std::endl;
-    if(size < 80){
-
-      json data;
-      data["input"]="explicit";
-      /*
-      data_vec[id] = arguments;
-
-      args[id] = data.dump();*/
+    if(size < 80){ 
       type_input[id]=1;
-      data_vec[id] = arguments;
-      data_length[id]=length;
-  
     }
     else{
-
-      json data;
-      data["input"]="implicit";
-      data["prefix"]="/consumer/sum/1";
-      data["id"] = id;
-      args[id] = data.dump();
-      
+      type_input[id]=0;
   }
 }
 
@@ -295,7 +303,6 @@ namespace examples {
       data.encode();
 
       int type=130;
-
       Block appParam((uint32_t)type);
       //b.push_back(tst);  
       //std::cout << "elementa_end = " << b.elements_end() << std::endl;
@@ -307,17 +314,16 @@ namespace examples {
     else{
       run();
 
-      std::string id = "id"; //data["id"];
-      std::string prefix = "prefix"; //data["prefix"];
+      std::string prefix = consumer_prefix[id]; //data["prefix"];
 
       auto a = Buffer(id.data(),id.size());
       auto b = std::make_shared<Buffer>(a);
-      Block id_block((uint32_t)201, b);
+      Block id_block((uint32_t)303, b);
       id_block.encode();
 
       auto a2 = Buffer(prefix.data(),prefix.size());
       auto b2 = std::make_shared<Buffer>(a2);
-      Block prefix_block((uint32_t)210, b2);
+      Block prefix_block((uint32_t)302, b2);
       prefix_block.encode();
 
 
@@ -372,6 +378,7 @@ namespace examples {
     Block response = data.getContent();
     response.parse();
     int type = response.elements()[0].type();
+    std::string id2 ="";
     //json response;
     //response = json::parse(resp);
     /*
@@ -391,6 +398,7 @@ namespace examples {
       //m_face.processEvents();
       return;
     }*/
+    std::cout << "D received, type: " << type << std::endl;
     switch(type){
         case 500:{
           Block in = response.get(type);
@@ -403,8 +411,41 @@ namespace examples {
                 std::string s =std::string(reinterpret_cast<const char*>(c.value()), c.value_size());
                 requests[id] = s;
               }
+              if (i2.type() == 303){
+                std::cout << "ACK, waiting interest" << std::endl;
+              }
             }
 
+          break;
+        }
+        case 510:
+        {
+          std::cout << "inside case 510" << std::endl;
+          Block in = response.get(type);
+          in.parse();
+          std::string result;
+          std::cout << "inside case 510:before for" << std::endl;
+          for ( auto i2: in.elements() )
+          { 
+            if( i2.type() == 303 ){
+              auto c = in.get(303);
+              id2 =std::string(reinterpret_cast<const char*>(c.value()), c.value_size());
+              std::cout << "inside case 510:found 303 : " << id2 << std::endl;
+
+            }
+            if( i2.type() == 501){
+              auto c = in.get(501);
+              result =std::string(reinterpret_cast<const char*>(c.value()), c.value_size());
+              std::cout << "inside case 510:found 501 : " << result << std::endl;
+            }
+          }
+          if (id2 != ""){
+            requests[id2]=result;
+          }
+
+          std::cout << "id: " << id2 << std::endl;
+          std::cout << "requests : " << id2 << std::endl;
+          m_face.shutdown();
           break;
         }
         default:

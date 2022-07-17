@@ -66,6 +66,7 @@ private:
   std::map<std::string, const char*> data_vec; //std::vector< unsigned char>> data_vec;
   std::map<std::string, int> data_length;
   std::map<std::string, bool> type_input;
+  std::map<std::string, std::string> consumer_prefix;
   //std::map<std::string, std::string> mem;
   json mem;
 };

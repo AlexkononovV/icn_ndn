@@ -70,16 +70,12 @@ private:
 
       int type = appParams.elements()[0].type();   
 
-      Block content((uint32_t)500);
+      //Block content((uint32_t)500);
       const unsigned char* buf_arg;
       int args_length;
-
-      //_____DELETE
-      json resp;
-      json params;
+      std::string consumer_prefix = "";
+      std::string id="";
       
-      params["data"] = "data" ;//json::parse(s);
-      //__________
       switch(type){
         case 130:{
           std::cout << "interest type 130 " << std::endl;
@@ -124,7 +120,7 @@ private:
               }
             }
           }
-
+          Block content((uint32_t)500);
           content.insert(content.elements_end() , Sum(buf_arg, args_length));
           content.encode(); 
 
@@ -135,55 +131,73 @@ private:
           
     
         case 131: {
-          if (params["input"]=="implicit"){
-            std::cout << "interest type 131 " << std::endl;
-            std::string prefix = params["prefix"];
-            resp["ACK"]="ACK";
-            resp["id"]=params["data"];
-            //content = resp.dump();
 
-            sendData(interest.getName(),content);
+          std::cout << "interest type 131 " << std::endl;
+          Block in = appParams.get(type);
+          in.parse();
+          for ( auto e: in.elements() )
+          { 
+            //std::cout << "element inside app params block : " << e << std::endl;
+            if (e.type() == 302){ 
+              std::cout << "type 302 found: prefix" <<std::endl;
+              Block prefix = in.get(302);
+              // buffer.parse();
+              std::string s =std::string(reinterpret_cast<const char*>(prefix.value()), prefix.value_size());
+              consumer_prefix = s;
+              std::cout << "prefix : "<< consumer_prefix << std::endl;
+            }
+            else if (e.type() == 303){ 
+              std::cout << "type 303 found: id" <<std::endl;
+              Block block_id = in.get(303);
+              // buffer.parse();
+              std::string s =std::string(reinterpret_cast<const char*>(block_id.value()), block_id.value_size());
+              id = s;
+              std::cout << "id : "<< s << std::endl;
 
-            fetchInput(prefix,resp["id"]);
-
-            std::cout << "after fecth input" << std::endl;
-            break;
+            }
           }
-        }
-        case 132: {
-          std::cout << "interest type 132 " << std::endl;
-          std::string id = params["id"];
-          std::string res = results[id];
-          resp["response"]=res;
-          resp["id"]=id;
-          //content = resp.dump();
+
+          auto a_id = Buffer(id.data(), id.size());
+          auto b_id = std::make_shared<Buffer>(a_id);
+          Block id_block((uint32_t)303, b_id);
+          id_block.encode();
+
+          Block content((uint32_t)500);
+          content.insert(content.elements_end() , id_block);
+          content.encode(); 
 
           sendData(interest.getName(),content);
+
+          fetchInput(consumer_prefix,id);
+
+          std::cout << "after fecth input" << std::endl;
           break;
         }
-        case 150:{
-          std::cout << "interest type 150 " << std::endl;
-          //std::string input = parseAppParams();
-          if (params["input"]=="explicit"){
-            
-            //content="Instantiating function";
+       case 135: {
+          Block in = appParams.get(type);
+          in.parse();
+          for ( auto e: in.elements())
+          {
+            if (e.type()==303){
+              std::cout << "type 303 found: id" <<std::endl;
+              Block block_id = in.get(303);
+              id =std::string(reinterpret_cast<const char*>(block_id.value()), block_id.value_size());
+            }
+          }
+          if (id != ""){
+            auto a_id = Buffer(id.data(), id.size());
+            auto b_id = std::make_shared<Buffer>(a_id);
+            Block id_block((uint32_t)303, b_id);
+            id_block.encode();
+
+            Block content((uint32_t)510);
+            content.insert(content.elements_end() , id_block);
+            content.insert(content.elements_end() , results[id]);
+            content.encode(); 
 
             sendData(interest.getName(),content);
-
-            break;
           }
-          
-        }
-
-        case 151: {
-          if (params["input"]=="implicit"){
-            
-            //content = "Getting input parameters for Instantiating function";
-
-            sendData(interest.getName(),content);
-
-            break;
-          }
+          break;
         }
         default:{
          json resp;
@@ -219,64 +233,87 @@ private:
 
   std::string
   fetchInput(std::string prefix, std::string id){
+    auto a2 = Buffer(id.data(),id.size());
+    auto m2 = std::make_shared<Buffer>(a2);
 
-    json data;
-    data["id"] = id;
-    data["response"] = "GET";
-    std::string s = data.dump();
+    Block id_block((uint32_t)303,m2);
+    id_block.encode();
 
-    sendInterest(prefix, s, 140);
+    sendInterest(prefix, id_block, 132);
 
   }
 
   void
   onData(const Interest&, const Data& data, std::string prefix)
   {
-    //std::cout << "Received Data " << data << std::endl;
-    /*
-    m_validator.validate(data,
-                         [] (const Data&) {
-                           std::cout << "Data conforms to trust schema" << std::endl;
-                         },
-                         [] (const Data&, const security::ValidationError& error) {
-                           std::cout << "Error authenticating data: " << error << std::endl;
-                         });
-    */
-    std::string resp = std::string(reinterpret_cast<const char*>(data.getContent().value()),data.getContent().value_size());
+    std::cout << "ON DATA" << std::endl;
+    Block response = data.getContent();
+    response.parse();
+    int type = response.elements()[0].type();   
+    std::string id;
+    const unsigned char* buf_arg;
+    int args_length=0;
+    switch(type){
+      case 520:{
+        std::cout << "data type 520 " << std::endl;
 
-    std::cerr << "\n>>D:  "
-              << resp
-              << std::endl;
+        Block in = response.get(type);
+        in.parse();
+        for ( auto e: in.elements())
+        {
+          if(e.type()==303){
+            std::cout<< "saving id" << std::endl;
+            Block block_id = in.get(303);
+              // buffer.parse();
+              id =std::string(reinterpret_cast<const char*>(block_id.value()), block_id.value_size());
+          }
+          if(e.type()==200){
+            std::cout<< "fetching input" << std::endl;
+            Block data_block = in.get(200);
+            data_block.parse();
 
-    json response;
-    response = json::parse(resp);
-    //std::string input;
+            for(auto e2 : data_block.elements() )
+            {
+              if(e2.type() ==300 ){
+                std::cout << "type 300 found: buffer" <<std::endl;
+                Block buffer = data_block.get(300);
+                buf_arg = reinterpret_cast<const unsigned char*>(buffer.value());
+              }
+              if(e2.type() ==301 ){
+                std::cout << "type 301 found: length" <<std::endl;
+                Block length = data_block.get(301);
+                //length.parse();
+                const char* aux = reinterpret_cast<const char*>(length.value());
+                args_length = *reinterpret_cast<const int*>(aux);
+                std::cout << "length = " << args_length << std::endl;
+              } 
+            }
+          }
+        }
+        if(args_length != 0){
+          results[id] = Sum(buf_arg, args_length);
 
-    auto error = response.find("error");
-    if( error != response.end() ) {
-      std::cout << "ERROR: " << response["error"] << std::endl;
-      return;
-    }
-    auto result = response.find("data");
-    if( result != response.end() ) {
-      std::cout << "\n recevied data with input" << std::endl;
-      std::string input = response["data"].dump();
-      std::string result = "result";//Sum(resp);
-      results[response["id"]] = result;
-      std::cout << "result sum: " << results[response["id"]] << std::endl;
-      json content;
-      content["id"] = response["id"];
-      content["response"] = "READY";
-      std::string s = content.dump();
-      //guardar result e madnar um ready
-      sendInterest(prefix, s, 141);
-      return;
-    }
-    auto res = response.find("response");
-    if( res != response.end() ){
-      std::string ack = response["response"].dump();
-      std::cout << "A: " << ack << std::endl;
-      return;
+          auto a2 = Buffer(id.data(),id.size());
+          auto m2 = std::make_shared<Buffer>(a2);
+
+          Block id_block((uint32_t)303,m2);
+          id_block.encode();
+          sendInterest(prefix, id_block, 133);
+        } 
+
+        break;
+      }
+      case 521:{
+        std::cout << "waiting to consumer get output.. "  << std::endl;
+        break;
+      }
+
+      default:
+      
+        break;
+      
+
+
     }
 
   }
@@ -337,30 +374,41 @@ private:
 
 
   void
-  sendInterest(std::string prefix, std::string appParams, int type){
+  sendInterest(std::string prefix, Block appParams, int type){
+
     std::cout << "sending interest with type = " << type << std::endl;
     Name interestName(prefix);
     interestName.appendVersion();
     Interest interest(interestName);
 
-    auto a = Buffer(appParams.data(),appParams.size());
-    auto m = std::make_shared<Buffer>(a);
+    if( type == 132 || type==133){
+      std::cout << "inside if" << std::endl;
+      /*auto a = Buffer(appParams.data(),appParams.size());
+      auto m = std::make_shared<Buffer>(a);
 
-    Block b((uint32_t)type, m);
-    b.encode();      
-    interest.setApplicationParameters( b);
+      Block id_block((uint32_t)303, m);
+      id_block.encode();  
+      */
+      Block inter((uint32_t)type);
+      
+      inter.insert(inter.elements_end() , appParams);
+      inter.encode();
+      std::cout << "before setting app params" << std::endl;
 
-    interest.setMustBeFresh(true);
-    interest.setInterestLifetime(10_s); // The default is 4 seconds
+      interest.setApplicationParameters( inter );
+      std::cout << "after setting app params" << std::endl;
+      interest.setMustBeFresh(true);
+      interest.setInterestLifetime(10_s); // The default is 4 seconds
 
-    std::cout << "Sending Interest " << interest << std::endl;
-    m_face.expressInterest(interest,
-                           std::bind(&Producer::onData, this,  _1, _2, prefix),
-                           std::bind(&Producer::onNack, this, _1, _2),
-                           std::bind(&Producer::onTimeout, this, _1));
+      std::cout << "Sending Interest " << interest << std::endl;
+      m_face.expressInterest(interest,
+                             std::bind(&Producer::onData, this,  _1, _2, prefix),
+                             std::bind(&Producer::onNack, this, _1, _2),
+                             std::bind(&Producer::onTimeout, this, _1));
 
-    // processEvents will block until the requested data is received or a timeout occurs
-    //m_face.processEvents();
+      // processEvents will block until the requested data is received or a timeout occurs
+      //m_face.processEvents();
+    }
 
   }
 
@@ -385,7 +433,7 @@ private:
   Face m_face;
   KeyChain m_keyChain;
   ScopedRegisteredPrefixHandle m_certServeHandle;
-  std::map<std::string, std::string> results;
+  std::map<std::string, Block> results;
 };
 
 } // namespace examples
